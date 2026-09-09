@@ -1,0 +1,64 @@
+name: Deploy Next.js to Ubuntu
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+
+      # 1. Checkout code
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # 2. Configure SSH
+      - name: Start SSH Agent
+        uses: webfactory/ssh-agent@v0.9.1
+        with:
+          ssh-private-key: ${{ secrets.SERVER_SSH_KEY }}
+
+      # 3. Install rsync
+      - name: Install rsync
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y rsync
+
+      # 4. Copy code to Ubuntu server
+      - name: Copy code to server
+        run: |
+          rsync -avz --delete \
+            -e "ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null" \
+            --exclude ".git" \
+            --exclude ".github" \
+            --exclude "node_modules" \
+            --exclude ".next" \
+            ./ \
+            ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:/home/ubuntu/sathya
+
+      # 5. Build and deploy
+      - name: Deploy application
+        run: |
+          ssh \
+            -o StrictHostKeyChecking=no \
+            -o UserKnownHostsFile=/dev/null \
+            ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} << 'EOF'
+
+            set -e
+
+            cd /home/ubuntu/sathya
+
+            echo "building the docker file"
+            docker build -t nothing .
+
+            echo "Starting application..."
+            docker compose up -d
+
+            
+
+            echo "Deployment completed!"
+
+            EOF
